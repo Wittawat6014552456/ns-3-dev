@@ -267,6 +267,8 @@ private:
   bool m_isARED;            //!< True to enable Adaptive RED
   bool m_isAdaptMaxP;       //!< True to adapt m_curMaxP
   double m_minTh;           //!< Minimum threshold for m_qAvg (bytes or packets)
+  double m_minTh2;           //!< Minimum threshold2 for m_qAvg (bytes or packets)
+  double type_red;     // type of red (red original or propose medthod red) 0 = original red 1 = propose medthod red
   double m_maxTh;           //!< Maximum threshold for m_qAvg (bytes or packets), should be >= 2 * m_minTh
   double m_qW;              //!< Queue weight given to cur queue size sample
   double m_lInterm;         //!< The max probability of dropping a packet

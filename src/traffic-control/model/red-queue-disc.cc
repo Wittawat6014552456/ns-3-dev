@@ -64,6 +64,7 @@
 #include "ns3/abort.h"
 #include "red-queue-disc.h"
 #include "ns3/drop-tail-queue.h"
+#include "ns3/video-type-tag.h"
 
 namespace ns3 {
 
@@ -122,6 +123,16 @@ TypeId RedQueueDisc::GetTypeId (void)
                    DoubleValue (5),
                    MakeDoubleAccessor (&RedQueueDisc::m_minTh),
                    MakeDoubleChecker<double> ())
+    .AddAttribute ("MinTh2",
+                   "Minimum average length threshold 2 in packets/bytes",
+                   DoubleValue (10),
+                   MakeDoubleAccessor (&RedQueueDisc::m_minTh2),
+                   MakeDoubleChecker<double> ())
+    .AddAttribute ("type_red",
+                   "Minimum average length threshold in packets/bytes",
+                   DoubleValue (0),
+                   MakeDoubleAccessor (&RedQueueDisc::type_red),
+                   MakeDoubleChecker<double> ())
     .AddAttribute ("MaxTh",
                    "Maximum average length threshold in packets/bytes",
                    DoubleValue (15),
@@ -135,7 +146,7 @@ TypeId RedQueueDisc::GetTypeId (void)
                    MakeQueueSizeChecker ())
     .AddAttribute ("QW",
                    "Queue weight related to the exponential weighted moving average (EWMA)",
-                   DoubleValue (0.002),
+                   DoubleValue (0.002), 
                    MakeDoubleAccessor (&RedQueueDisc::m_qW),
                    MakeDoubleChecker <double> ())
     .AddAttribute ("LInterm",
@@ -363,7 +374,8 @@ RedQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
 
       m_idle = 0;
     }
-
+  //std::cout << m_cautious << std::endl;
+  //std::cout << "Min Th : " << m_minTh << "Max Th : " << m_maxTh << " CurrentQueueSize : " << nQueued << "  " << " m_isGentle : " << m_isGentle  << std::endl;
   m_qAvg = Estimator (nQueued, m + 1, m_qAvg, m_qW);
 
   NS_LOG_DEBUG ("\t bytesInQueue  " << GetInternalQueue (0)->GetNBytes () << "\tQavg " << m_qAvg);
@@ -372,45 +384,152 @@ RedQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
   m_count++;
   m_countBytes += item->GetSize ();
 
-  uint32_t dropType = DTYPE_NONE;
-  if (m_qAvg >= m_minTh && nQueued > 1)
-    {
-      if ((!m_isGentle && m_qAvg >= m_maxTh) ||
-          (m_isGentle && m_qAvg >= 2 * m_maxTh))
-        {
-          NS_LOG_DEBUG ("adding DROP FORCED MARK");
-          dropType = DTYPE_FORCED;
-        }
-      else if (m_old == 0)
-        {
-          /* 
-           * The average queue size has just crossed the
-           * threshold from below to above m_minTh, or
-           * from above m_minTh with an empty queue to
-           * above m_minTh with a nonempty queue.
-           */
-          m_count = 1;
-          m_countBytes = item->GetSize ();
-          m_old = 1;
-        }
-      else if (DropEarly (item, nQueued))
-        {
-          NS_LOG_LOGIC ("DropEarly returns 1");
-          dropType = DTYPE_UNFORCED;
-        }
-    }
-  else 
-    {
-      // No packets are being dropped
-      m_vProb = 0.0;
-      m_old = 0;
-    }
+  // -----get Type of packet------------------
+  VideoPacketTypeTag videoTag;
+  std::string strPacketType;
+  item->GetPacket()->PeekPacketTag(videoTag);
+  strPacketType = videoTag.GetVideoPacketType();
 
+  //if ((strPacketType == "B") ||(strPacketType == "H") || (strPacketType == "P")){
+  // if (nQueued > 0){
+  //  std::cout << "type " << strPacketType << " currentQsize  " << nQueued  << "  Qavg   " << m_qAvg  << std::endl;
+  // }
+  //}
+  //std::cout  << " : " << !m_isGentle << std::endl;
+  // -----------------------------------------
+  //if ((m_qAvg > 19) && (m_qAvg < 30)){
+    //std::cout << "Q_Avg : " << m_qAvg << " m_OLD : " << m_old << " m_count :" << m_count << "m_countbyte :" << m_countBytes  << std::endl;
+  //}
+
+  uint32_t dropType = DTYPE_NONE;
+  if (type_red == 0)
+  {
+    //if ((strPacketType == "B") || (strPacketType == "H") || (strPacketType == "P")) {
+    //  std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << " QueueLen : " << nQueued << std::endl;
+    //}
+    if (m_qAvg >= m_minTh && nQueued > 1)
+      {
+        if ((!m_isGentle && m_qAvg >= m_maxTh) ||
+            (m_isGentle && m_qAvg >= 2 * m_maxTh))
+          {
+            NS_LOG_DEBUG ("adding DROP FORCED MARK");
+            dropType = DTYPE_FORCED;
+          }
+        else if (m_old == 0)
+          {
+            /* 
+            * The average queue size has just crossed the
+            * threshold from below to above m_minTh, or
+            * from above m_minTh with an empty queue to
+            * above m_minTh with a nonempty queue.
+            */
+            m_count = 1;
+            m_countBytes = item->GetSize ();
+            m_old = 1;
+          }
+        else if (DropEarly (item, nQueued))
+          {
+            NS_LOG_LOGIC ("DropEarly returns 1");
+            dropType = DTYPE_UNFORCED;
+          }
+      }
+    else 
+      {
+        // No packets are being dropped
+        m_vProb = 0.0;
+        m_old = 0;
+      }
+  }
+  else if (type_red == 1)
+  {
+     //if ((strPacketType == "B") || (strPacketType == "H") || (strPacketType == "P")) {
+      // if (m_qAvg >=10){
+          //std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << "Qlen : " << nQueued << std::endl;
+      // }
+     //}
+
+    if (m_qAvg >= m_minTh && m_qAvg < m_minTh2 && nQueued > 1)
+      {
+        if (strPacketType == "B")  //B
+        {
+          if (DropEarly (item, nQueued))
+          {
+            //std::cout << "th1: " << "Qavg : " << m_qAvg << " drop type : " << dropType << std::endl;
+            NS_LOG_LOGIC ("DropEarly returns 1");
+            dropType = DTYPE_UNFORCED;
+          }
+        }
+        //std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << std::endl;
+        //std::cout << "th1: " << "Qavg : " << m_qAvg << " drop type : " << dropType << std::endl;
+      }
+    else if(m_qAvg >= m_minTh2 && nQueued > 1)
+      {
+        if ((!m_isGentle && m_qAvg >= m_maxTh) ||
+            (m_isGentle && m_qAvg >= 2 * m_maxTh))
+          {
+            NS_LOG_DEBUG ("adding DROP FORCED MARK");
+            dropType = DTYPE_FORCED;
+            //std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << std::endl;
+          }
+        else if (m_old == 0)
+          {
+            /* 
+            * The average queue size has just crossed the
+            * threshold from below to above m_minTh, or
+            * from above m_minTh with an empty queue to
+            * above m_minTh with a nonempty queue.
+            */
+            m_count = 1;
+            m_countBytes = item->GetSize ();
+            m_old = 1;
+          }
+        else if ((strPacketType == "B"))  //|| (strPacketType == "P")
+          {
+            NS_LOG_DEBUG ("adding DROP FORCED MARK --pb");
+            dropType = DTYPE_FORCED;
+            //std::cout << "th2: " << "Qavg : " << m_qAvg << " drop type : " << dropType << std::endl;
+            //std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << std::endl;
+          }
+        // else if (DropEarly (item, nQueued))
+        //   {
+        //     NS_LOG_LOGIC ("DropEarly returns 1");
+        //     dropType = DTYPE_UNFORCED;
+        //     //std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << std::endl;
+        //   }
+      }
+    else 
+      {
+        // No packets are being dropped
+        m_vProb = 0.0;
+        m_old = 0;
+      } 
+  }
+  //if (m_old == 0){
+  //  std::cout << type_red << std::endl;
+  //}
+  // if ((m_qAvg > 20) && (m_qAvg < 130)){
+  //   if (dropType == 1){
+  //     std::cout << "AvgQ : " << m_qAvg << ":" << dropType << ":" << 2 * m_maxTh << std::endl;
+  //   }
+  // }
+  // if ((strPacketType == "B") ||(strPacketType == "H") || (strPacketType == "P"))
+  //   {
+  //     dropType = dropType;
+  //     //std::cout << strPacketType << "Drop Type : " << dropType << std::endl;
+  //   }else if((strPacketType != "B") && (strPacketType != "H") && (strPacketType != "P"))
+  //   {
+  //     dropType = DTYPE_FORCED;
+  //     //std::cout << strPacketType << " :Drop Type : " << dropType << std::endl;
+  //   }
+  
+  //dropType = DTYPE_NONE;
   if (dropType == DTYPE_UNFORCED)
     {
       if (!m_useEcn || !Mark (item, UNFORCED_MARK))
         {
           NS_LOG_DEBUG ("\t Dropping due to Prob Mark " << m_qAvg);
+          //std::cout << "\t Dropping due to Prob Mark " << " minth " << m_minTh << "  QAvg   " << m_qAvg  <<  std::endl;
+          //std::cout << "th1: " << "Qavg : " << m_qAvg << " drop type : " << dropType << " : Packet Type = " << strPacketType << std::endl;
           DropBeforeEnqueue (item, UNFORCED_DROP);
           return false;
         }
@@ -420,6 +539,8 @@ RedQueueDisc::DoEnqueue (Ptr<QueueDiscItem> item)
     {
       if (m_useHardDrop || !m_useEcn || !Mark (item, FORCED_MARK))
         {
+          //std::cout << "th1: " << "Qavg : " << m_qAvg << " drop type : " << dropType << " : Packet Type = " << strPacketType << std::endl;
+          //std::cout << strPacketType << " : " << dropType << " : " << "Qavg : " << m_qAvg << std::endl;
           NS_LOG_DEBUG ("\t Dropping due to Hard Mark " << m_qAvg);
           DropBeforeEnqueue (item, FORCED_DROP);
           if (m_isNs1Compat)
@@ -455,7 +576,7 @@ RedQueueDisc::InitializeParams (void)
   NS_LOG_FUNCTION (this);
   NS_LOG_INFO ("Initializing RED params.");
 
-  m_cautious = 0;
+  m_cautious = 0; //0
   m_ptc = m_linkBandwidth.GetBitRate () / (8.0 * m_meanPktSize);
 
   if (m_isARED)
@@ -655,7 +776,7 @@ RedQueueDisc::DropEarly (Ptr<QueueDiscItem> item, uint32_t qSize)
 
   double prob1 = CalculatePNew ();
   m_vProb = ModifyP (prob1, item->GetSize ());
-
+  
   // Drop probability is computed, pick random number and act
   if (m_cautious == 1)
     {
@@ -693,7 +814,7 @@ RedQueueDisc::DropEarly (Ptr<QueueDiscItem> item, uint32_t qSize)
           u *= 1.0 / ratio;
         }
     }
-
+  
   if (u <= m_vProb)
     {
       NS_LOG_LOGIC ("u <= m_vProb; u " << u << "; m_vProb " << m_vProb);
@@ -812,6 +933,9 @@ RedQueueDisc::DoDequeue (void)
 {
   NS_LOG_FUNCTION (this);
 
+  // uint32_t nQueued_ = GetInternalQueue (0)->GetCurrentSize ().GetValue ();
+  // std::cout << nQueued_ << std::endl;
+
   if (GetInternalQueue (0)->IsEmpty ())
     {
       NS_LOG_LOGIC ("Queue empty");
@@ -824,6 +948,7 @@ RedQueueDisc::DoDequeue (void)
     {
       m_idle = 0;
       Ptr<QueueDiscItem> item = GetInternalQueue (0)->Dequeue ();
+
 
       NS_LOG_LOGIC ("Popped " << item);
 

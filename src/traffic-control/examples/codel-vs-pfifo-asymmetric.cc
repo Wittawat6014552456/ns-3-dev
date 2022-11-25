@@ -116,7 +116,7 @@ TraceSojourn (std::string sojournTrFileName)
 static void
 QueueLengthTracer (Ptr<OutputStreamWrapper>stream, uint32_t oldval, uint32_t newval)
 {
-  *stream->GetStream () << oldval << " " << newval << std::endl;
+  *stream->GetStream () << oldval << "  " << newval << std::endl;
 }
 
 static void

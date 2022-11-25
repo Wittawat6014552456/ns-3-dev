@@ -3,3 +3,4 @@
 !.gitignore
 !subdir/
 !scratch-simulator.cc
+!pm-ex2.cc
